@@ -7,11 +7,13 @@ import requests
 class Hotels:
     def __init__(self, name):
         self.name = name
-        self.price = None
-        self.photo = None
+        self.price_string = None
+        self.price_digit = None
 
 
-def search_region_id(id, country, town):
+def search_coordinates(country, town):
+    coordinates = {}
+
     url = "https://hotels4.p.rapidapi.com/locations/v3/search"
 
     querystring = {"q": town, "locale": "en_US", "langid": "1033", "siteid": "300000001"}
@@ -21,37 +23,27 @@ def search_region_id(id, country, town):
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
-    logging.info(f"ID: {id}. Starting search region id")
-
     response = requests.request("GET", url, headers=headers, params=querystring)
 
     response_json = json.loads(response.text)
 
-    two_list = []
+    if response.status_code != 200:
+        return True, coordinates
+
     for item in response_json['sr']:
 
-        if country in item["regionNames"]["fullName"]:
-            coordinate_1 = item['coordinates']['lat']
-            two_list.append(coordinate_1)
-            coordinate_2 = item['coordinates']['long']
-            two_list.append(coordinate_2)
-            break
-
-        elif country == item['hierarchyInfo']['country']['name']:
-            coordinate_1 = item['coordinates']['lat']
-            two_list.append(coordinate_1)
-            coordinate_2 = item['coordinates']['long']
-            two_list.append(coordinate_2)
+        if country == item['hierarchyInfo']['country']['name']:
+            coordinates = {"latitude": float(item['coordinates']['lat']),
+                           "longitude": float(item['coordinates']['long'])}
             break
         else:
             continue
 
-    return two_list
+    return False, coordinates
 
 
-def search_hotels(coordinate_1, coordinate_2, search_params):
-    coordinate_1 = float(coordinate_1)
-    coordinate_2 = float(coordinate_2)
+def search_hotels(coordinates, search_params):
+    hotels_result = []
 
     url = "https://hotels4.p.rapidapi.com/properties/v2/list"
 
@@ -60,7 +52,7 @@ def search_hotels(coordinate_1, coordinate_2, search_params):
         "eapid": 1,
         "locale": "en_US",
         "siteId": 300000001,
-        "destination": {"coordinates": {"latitude": coordinate_1, "longitude": coordinate_2}},
+        "destination": {"coordinates": coordinates},
         "checkInDate": {
             "day": 10,
             "month": 10,
@@ -78,11 +70,10 @@ def search_hotels(coordinate_1, coordinate_2, search_params):
             }
         ],
         "resultsStartingIndex": 0,
-        "resultsSize": search_params.count,
         "sort": "PRICE_LOW_TO_HIGH",
         "filters": {"price": {
-            "max": 10000,
-            "min": 100
+            "max": search_params.cost_max,
+            "min": search_params.cost_min
         }}
     }
     headers = {
@@ -94,22 +85,33 @@ def search_hotels(coordinate_1, coordinate_2, search_params):
     response = requests.request("POST", url, json=payload, headers=headers)
     response_json = json.loads(response.text)
 
+    if response.status_code != 200:
+        return True, hotels_result
 
-    hotels = []
     hotels_count = 0
+    hotels = []
 
     for item in response_json['data']['propertySearch']['properties']:
+        hotel = Hotels(item['name'])
+        hotel.price_string = item['price']['lead']['formatted']
+        hotel.price_digit = item['price']['lead']['amount']
+        hotel.id = item['id']
+        hotels.append(hotel)
+        hotels_count += 1
+
+    hotels = sorted(hotels, key=lambda d: d.price_digit, reverse=search_params.sort_revers)
+
+    hotels_result = []
+    hotels_count = 0
+
+    for item in hotels:
         if hotels_count == int(search_params.count):
             break
         else:
-            hotel = Hotels(item['name'])
-            hotel.price = item['price']['lead']['formatted']
-            hotel.photo = item['propertyImage']['image']['url']
-            hotel.id = item['id']
-            hotels.append(hotel)
+            hotels_result.append(item)
             hotels_count += 1
 
-    return hotels
+    return False, hotels_result
 
 
 def info_hotels(id_hotel, search_params):
@@ -149,4 +151,3 @@ def info_hotels(id_hotel, search_params):
     map_photo = response_json['data']["propertyInfo"]['summary']['location']["staticImage"]['url']
     address_photo_map.append(map_photo)
     return address_photo_map
-

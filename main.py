@@ -3,7 +3,6 @@ import sys
 
 import telebot
 from telebot import types, formatting
-from telebot.types import InputMediaPhoto
 
 import api
 
@@ -18,6 +17,9 @@ class SearchParams:
         self.count = None
         self.show_photo = None
         self.count_photo = None
+        self.sort_revers = False
+        self.cost_min = 100
+        self.cost_max = 10000
 
 
 # Handle '/start' and '/help'
@@ -27,9 +29,14 @@ def send_welcome(message):
         bot.reply_to(message, "Hi there, I am EchoBot.\n"
                               "I am here to echo your kind words back to you.\n"
                               "Just say anything nice and I'll say the exact same thing to you!")
-    elif message.text == "/lowprice" or '/highprice':
+    elif message.text == "/lowprice":
         msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
         search_params = SearchParams(message.text)
+        bot.register_next_step_handler(msg, read_country, search_params=search_params)
+    elif message.text == "/highprice":
+        msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
+        search_params = SearchParams(message.text)
+        search_params.sort_revers = True
         bot.register_next_step_handler(msg, read_country, search_params=search_params)
     else:
         bot.send_message(message.from_user.id, "Unknown message")
@@ -37,14 +44,14 @@ def send_welcome(message):
 
 def read_country(message, search_params):
     search_params.country = message.text
-    logging.info(f"ID: {message.message_id}. Target country: {message.text}")
+    logging.info(f"User: {message.from_user.username}. Target country: {message.text}")
     msg = bot.reply_to(message, "В каком городе будем искать?")
     bot.register_next_step_handler(msg, read_town, search_params=search_params)
 
 
 def read_town(message, search_params):
     search_params.town = message.text
-    logging.info(f"ID: {message.message_id}. Target town: {message.text}")
+    logging.info(f"User: {message.from_user.username}. Target town: {message.text}")
     msg = bot.reply_to(message, "Сколько отелей вывести?")
     bot.register_next_step_handler(msg, read_hotel_count, search_params=search_params)
 
@@ -58,7 +65,7 @@ def read_hotel_count(message, search_params):
         return
 
     search_params.count = count
-    logging.info(f"ID: {message.message_id}. Search hotel count: {count}")
+    logging.info(f"User: {message.from_user.username}. Search hotel count: {count}")
 
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
     markup.add("Да", "Нет")
@@ -87,12 +94,12 @@ def read_photo(message, search_params):
         bot.reply_to(message, "Идет поиск...")
         search_hotel(message, search_params)
 
-    logging.info(f"ID: {message.message_id}. Load photos: {photo}")
+    logging.info(f"User: {message.from_user.username}. Load photos: {photo}")
 
 
 def read_count_photo(message, search_params):
     count_photo = message.text
-    logging.info(f"ID: {message.message_id}. Search hotel count: {count_photo}")
+    logging.info(f"User: {message.from_user.username}. Search hotel count: {count_photo}")
 
     search_params.count_photo = count_photo
     bot.reply_to(message, "Идет поиск...")
@@ -100,19 +107,32 @@ def read_count_photo(message, search_params):
 
 
 def search_hotel(message, search_params):
-    region_id = api.search_region_id(message.message_id, search_params.country, search_params.town)
+    logging.info(f"User: {message.from_user.username}. Starting search town coordinates")
 
-    if not region_id:
-        bot.send_message(message.from_user.id, f"Город или страна не найдены. Пожалуйста, повторите поиск сначала.")
+    err, coordinates = api.search_coordinates(search_params.country, search_params.town)
+
+    if err or not coordinates:
+        logging.error(f"User: {message.from_user.username}. Coordinates for country: '{search_params.country}', "
+                      f"town: '{search_params.town}'. Not found")
+        bot.send_message(message.from_user.id, "Город или страна не найдены. Пожалуйста, повторите поиск сначала.")
         return
+    else:
+        logging.info(f"User: {message.from_user.username}. Coordinates successfully found")
 
-    hotels = api.search_hotels(region_id[0], region_id[1], search_params)
+    logging.info(f"User: {message.from_user.username}. Starting search hotels")
+
+    err, hotels = api.search_hotels(coordinates, search_params)
+
+    if err:
+        logging.error(f"User: {message.from_user.username}. Can't find hotels")
+        bot.send_message(message.from_user.id, "Отели не найдены. Пожалуйста, повторите поиск сначала.")
+        return
 
     for hotel in hotels:
         data_hotel = api.info_hotels(hotel.id, search_params)
 
         bot.send_message(message.from_user.id,
-                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price}. ",
+                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. ",
                          parse_mode="Markdown")
 
         bot.send_photo(message.from_user.id, photo=data_hotel[-1], caption=formatting.mbold("Местоположение на карте"),
