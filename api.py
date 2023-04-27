@@ -32,6 +32,9 @@ def search_coordinates(country, town):
 
     for item in response_json['sr']:
 
+        if 'name' not in item['hierarchyInfo']['country'].keys():
+            continue
+
         if country == item['hierarchyInfo']['country']['name']:
             coordinates = {"latitude": float(item['coordinates']['lat']),
                            "longitude": float(item['coordinates']['long'])}

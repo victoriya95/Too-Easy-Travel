@@ -94,8 +94,6 @@ def read_photo(message, search_params):
         bot.reply_to(message, "Идет поиск...")
         search_hotel(message, search_params)
 
-    logging.info(f"User: {message.from_user.username}. Load photos: {photo}")
-
 
 def read_count_photo(message, search_params):
     count_photo = message.text
@@ -145,6 +143,8 @@ def search_hotel(message, search_params):
                 lisi_jpeg.append(telebot.types.InputMediaPhoto(data_hotel[1][i]))
 
             bot.send_media_group(message.from_user.id, lisi_jpeg)
+
+    bot.send_message(message.from_user.id, "Поиск закончен!")
 
 
 if __name__ == "__main__":
