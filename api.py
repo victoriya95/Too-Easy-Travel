@@ -35,7 +35,7 @@ def search_coordinates(country, town):
         if 'name' not in item['hierarchyInfo']['country'].keys():
             continue
 
-        if country == item['hierarchyInfo']['country']['name']:
+        if str.title(country) == item['hierarchyInfo']['country']['name']:
             coordinates = {"latitude": float(item['coordinates']['lat']),
                            "longitude": float(item['coordinates']['long'])}
             break
@@ -91,7 +91,7 @@ def search_hotels(coordinates, search_params):
     if response.status_code != 200:
         return True, hotels_result
 
-    hotels_count = 0
+
     hotels = []
 
     for item in response_json['data']['propertySearch']['properties']:
@@ -99,8 +99,9 @@ def search_hotels(coordinates, search_params):
         hotel.price_string = item['price']['lead']['formatted']
         hotel.price_digit = item['price']['lead']['amount']
         hotel.id = item['id']
-        hotels.append(hotel)
-        hotels_count += 1
+        hotel.value = item['destinationInfo']['distanceFromDestination']['value']
+        if search_params.distance_min < hotel.value < search_params.distance_max:
+            hotels.append(hotel)
 
     hotels = sorted(hotels, key=lambda d: d.price_digit, reverse=search_params.sort_revers)
 

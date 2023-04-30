@@ -10,36 +10,87 @@ bot = telebot.TeleBot('6095050306:AAEsvO8Vdvb69Pc5w9v2rcT2gBh66l4c_I0')
 
 
 class SearchParams:
-    def __init__(self, instruction):
-        self.instruction = instruction
+    def __init__(self):
         self.country = None
         self.town = None
         self.count = None
         self.show_photo = None
         self.count_photo = None
         self.sort_revers = False
-        self.cost_min = 100
-        self.cost_max = 10000
+        self.cost_min = 100.0
+        self.cost_max = 10000.0
+        self.distance_min = 0
+        self.distance_max = 10000
 
 
 # Handle '/start' and '/help'
-@bot.message_handler(commands=['help', 'start', 'lowprice', 'highprice'])
+@bot.message_handler(commands=['help', 'start', 'lowprice', 'highprice', 'bestdeal'])
 def send_welcome(message):
     if message.text in ["/start", "/help"]:
         bot.reply_to(message, "Hi there, I am EchoBot.\n"
                               "I am here to echo your kind words back to you.\n"
                               "Just say anything nice and I'll say the exact same thing to you!")
     elif message.text == "/lowprice":
-        msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
-        search_params = SearchParams(message.text)
-        bot.register_next_step_handler(msg, read_country, search_params=search_params)
+        search_params = SearchParams()
+        start_search(message, search_params)
     elif message.text == "/highprice":
-        msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
-        search_params = SearchParams(message.text)
+        search_params = SearchParams()
         search_params.sort_revers = True
-        bot.register_next_step_handler(msg, read_country, search_params=search_params)
+        start_search(message, search_params)
+    elif message.text == "/bestdeal":
+        search_params = SearchParams()
+        msg = bot.reply_to(message, "Пожалуйста введите минимальную стоимость отеля")
+        bot.register_next_step_handler(msg, min_cost, search_params=search_params)
     else:
         bot.send_message(message.from_user.id, "Unknown message")
+
+
+def start_search(message, search_params):
+    msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
+    bot.register_next_step_handler(msg, read_country, search_params=search_params)
+
+
+def min_cost(message, search_params):
+    if not message.text.isdigit():
+        msg = bot.reply_to(message, "Пожалуйста, введите минимальную стоимость цифрой")
+        bot.register_next_step_handler(msg, min_cost, search_params=search_params)
+        return
+
+    search_params.cost_min = float(message.text)
+    msg = bot.reply_to(message, "Пожалуйста введите максимальную стоимость отеля")
+    bot.register_next_step_handler(msg, max_cost, search_params=search_params)
+
+
+def max_cost(message, search_params):
+    if not message.text.isdigit():
+        msg = bot.reply_to(message, "Пожалуйста, введите максимальную стоимость цифрой")
+        bot.register_next_step_handler(msg, max_cost, search_params=search_params)
+        return
+
+    search_params.cost_max = float(message.text)
+    msg = bot.reply_to(message, "Пожалуйста введите минимальное расстояние от центра")
+    bot.register_next_step_handler(msg, min_dest, search_params=search_params)
+
+
+def min_dest(message, search_params):
+    if not message.text.isdigit():
+        msg = bot.reply_to(message, "Пожалуйста, введите минимальное расстояние цифрой")
+        bot.register_next_step_handler(msg, min_dest, search_params=search_params)
+        return
+
+    search_params.distance_min = float(message.text)
+    msg = bot.reply_to(message, "Пожалуйста введите максимальное расстояние от центра")
+    bot.register_next_step_handler(msg, max_dest, search_params=search_params)
+
+
+def max_dest(message, search_params):
+    if not message.text.isdigit():
+        msg = bot.reply_to(message, "Пожалуйста, введите максимальное расстояние цифрой")
+        bot.register_next_step_handler(msg, max_dest, search_params=search_params)
+        return
+    else:
+        search_params.distance_max = float(message.text)
+        start_search(message, search_params)
 
 
 def read_country(message, search_params):
@@ -121,22 +172,27 @@ def search_hotel(message, search_params):
 
     err, hotels = api.search_hotels(coordinates, search_params)
 
-    if err:
+    if err or hotels == []:
         logging.error(f"User: {message.from_user.username}. Can't find hotels")
         bot.send_message(message.from_user.id, "Отели не найдены. Пожалуйста, повторите поиск сначала.")
         return
 
+
     for hotel in hotels:
+        logging.info(f"User: {message.from_user.username}. Checking for the status of the response code")
+
         data_hotel = api.info_hotels(hotel.id, search_params)
 
         bot.send_message(message.from_user.id,
-                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. ",
+                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. \n\n*• Диапазон расстояния*:   {hotel.value}. ",
                          parse_mode="Markdown")
 
-        bot.send_photo(message.from_user.id, photo=data_hotel[-1], caption=formatting.mbold("Местоположение на карте"),
+        logging.info(f"User: {message.from_user.username}. Map search")
+        bot.send_photo(message.from_user.id, photo=data_hotel[-1], caption=formatting.mbold("• Местоположение на карте"),
                        parse_mode="MarkdownV2")
 
         if search_params.show_photo == "Да":
+            logging.info(f"User: {message.from_user.username}. Starting search photo")
             lisi_jpeg = []
             bot.send_message(message.from_user.id, f"\n*Фото отеля*:\n", parse_mode="Markdown")
             for i in range(search_params.count_photo):
@@ -144,7 +200,10 @@ def search_hotel(message, search_params):
 
             bot.send_media_group(message.from_user.id, lisi_jpeg)
 
-    bot.send_message(message.from_user.id, "Поиск закончен!")
+
+    logging.error(f"User: {message.from_user.username}. Find hotels successfully!")
+    bot.send_message(message.from_user.id, f"\n*Поиск закончен!*\n", parse_mode="Markdown")
+
 
 
 if __name__ == "__main__":
@@ -156,7 +215,8 @@ if __name__ == "__main__":
             telebot.types.BotCommand("/start", "Start work with bot"),
             telebot.types.BotCommand("/help", "Show help"),
             telebot.types.BotCommand("/lowprice", "Поиск дешевых отелей!"),
-            telebot.types.BotCommand("/highprice", "Поиск дорогих отелей!")
+            telebot.types.BotCommand("/highprice", "Поиск дорогих отелей!"),
+            telebot.types.BotCommand("/bestdeal", "Поиск лучших предложений!")
         ]
     )
     # Enable saving next step handlers to file "./.handlers-saves/step.save".
