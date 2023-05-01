@@ -57,14 +57,14 @@ def search_hotels(coordinates, search_params):
         "siteId": 300000001,
         "destination": {"coordinates": coordinates},
         "checkInDate": {
-            "day": 10,
-            "month": 10,
-            "year": 2023
+            "day": int(search_params.arrival[0]),
+            "month": int(search_params.arrival[1]),
+            "year": int(search_params.arrival[2]),
         },
         "checkOutDate": {
-            "day": 15,
-            "month": 10,
-            "year": 2023
+            "day": int(search_params.departure[0]),
+            "month": int(search_params.departure[1]),
+            "year": int(search_params.departure[2]),
         },
         "rooms": [
             {
@@ -138,7 +138,6 @@ def info_hotels(id_hotel, search_params):
 
     response = requests.request("POST", url, json=payload, headers=headers)
     response_json = json.loads(response.text)
-    print(response_json)
 
     address_photo_map = []
     address = (response_json['data']["propertyInfo"]['summary']['location']['address']['addressLine'])

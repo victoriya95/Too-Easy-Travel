@@ -120,6 +120,64 @@ def read_hotel_count(message, search_params):
     search_params.count = count
     logging.info(f"User: {message.from_user.username}. Search hotel count: {count}")
 
+    msg = bot.reply_to(message, "Введите дату въезда (цифрами, через точку):")
+    bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
+
+
+def read_date_arrival(message, search_params):
+    arrival = message.text
+    date_arrival = arrival.split('.')
+
+    search_params.arrival = date_arrival
+
+    for i in search_params.arrival:
+        if not i.isdigit():
+            msg = bot.reply_to(message, "Пожалуйста, введите дату въезда цифрой. Какая дата въезда (цифрами, через пробел):")
+            bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
+            return
+
+
+    if 0 < int(search_params.arrival[0]) > 31 or 0 < int(search_params.arrival[1]) > 12 or 0 < int(search_params.arrival[2]) >= 2025 or int(search_params.arrival[2]) < 2023:
+        msg = bot.reply_to(message, "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через пробел) :")
+        bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
+        return
+
+    logging.info(f"User: {message.from_user.username}. Recording the arrival date: {date_arrival}")
+
+    msg = bot.reply_to(message, "Введите дату отъезда (цифрами, через точку):")
+    bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
+
+def read_date_departure(message, search_params):
+    departure = message.text
+    date_departure = (departure.split('.'))
+
+    search_params.departure = date_departure
+
+    for i in search_params.departure:
+        if not i.isdigit():
+            msg = bot.reply_to(message, "Пожалуйста, введите дату отъезда цифрой. Какая дата отъезда (цифрами, через точку):")
+            bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
+            return
+
+    if 0 < int(search_params.departure[0]) > 31 or 0 < int(search_params.departure[1]) > 12 or 0 < int(search_params.departure[2]) >= 2025 or int(search_params.departure[2]) < 2023:
+        msg = bot.reply_to(message, "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через пробел) :")
+        bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
+        return
+
+
+    if search_params.departure[2] < search_params.arrival[2]:
+        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+        return
+    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] < search_params.arrival[1]:
+        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+        return
+    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] == search_params.arrival[1] and search_params.departure[0] < search_params.arrival[0]:
+        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+        return
+
+
+    logging.info(f"User: {message.from_user.username}. Recording the arrival date: {date_departure}")
+
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
     markup.add("Да", "Нет")
     msg = bot.reply_to(message, "Загрузить фотографии для каждого отеля?", reply_markup=markup)
@@ -185,8 +243,7 @@ def search_hotel(message, search_params):
 
         data_hotel = api.info_hotels(hotel.id, search_params)
 
-        bot.send_message(message.from_user.id,
-                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. \n\n*• Диапазон расстояния*:   {hotel.value}. ",
+        bot.send_message(message.from_user.id, f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. \n\n*• Диапазон расстояния*:   {hotel.value}.",
                          parse_mode="Markdown")
 
         logging.info(f"User: {message.from_user.username}. Map search")
