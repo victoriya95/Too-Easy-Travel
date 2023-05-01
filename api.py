@@ -138,6 +138,7 @@ def info_hotels(id_hotel, search_params):
 
     response = requests.request("POST", url, json=payload, headers=headers)
     response_json = json.loads(response.text)
+    print(response_json)
 
     address_photo_map = []
     address = (response_json['data']["propertyInfo"]['summary']['location']['address']['addressLine'])
@@ -154,4 +155,5 @@ def info_hotels(id_hotel, search_params):
 
     map_photo = response_json['data']["propertyInfo"]['summary']['location']["staticImage"]['url']
     address_photo_map.append(map_photo)
+
     return address_photo_map

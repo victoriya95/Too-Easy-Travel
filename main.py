@@ -21,6 +21,8 @@ class SearchParams:
         self.cost_max = 10000.0
         self.distance_min = 0
         self.distance_max = 10000
+        self.arrival = None
+        self.departure = None
 
 
 # Handle '/start' and '/help'
