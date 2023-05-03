@@ -3,8 +3,10 @@ import sys
 
 import telebot
 from telebot import types, formatting
+import datetime
 
 import api
+import sql
 
 bot = telebot.TeleBot('6095050306:AAEsvO8Vdvb69Pc5w9v2rcT2gBh66l4c_I0')
 
@@ -23,71 +25,98 @@ class SearchParams:
         self.distance_max = 10000
         self.arrival = None
         self.departure = None
+        self.command = None
 
 
-# Handle '/start' and '/help'
-@bot.message_handler(commands=['help', 'start', 'lowprice', 'highprice', 'bestdeal'])
+@bot.message_handler(commands=['help', 'start', 'lowprice', 'highprice', 'bestdeal', 'history'])
 def send_welcome(message):
     if message.text in ["/start", "/help"]:
-        bot.reply_to(message, "Hi there, I am EchoBot.\n"
-                              "I am here to echo your kind words back to you.\n"
-                              "Just say anything nice and I'll say the exact same thing to you!")
+
+        bot.reply_to(message, 'Здравствуйте. Я бот компании "Too Easy Travel". \n'
+                              'Я помогу вам найти подходящие отели для прекрасного отдыха. \n'
+                              'Выберите подходящую команду из меню. \n')
+
     elif message.text == "/lowprice":
         search_params = SearchParams()
+        search_params.command = message.text
         start_search(message, search_params)
     elif message.text == "/highprice":
         search_params = SearchParams()
+        search_params.command = message.text
         search_params.sort_revers = True
         start_search(message, search_params)
     elif message.text == "/bestdeal":
         search_params = SearchParams()
-        msg = bot.reply_to(message, "Пожалуйста введите минимальную стоимость отеля")
+        search_params.command = message.text
+        msg = bot.reply_to(message, "Пожалуйста введите минимальную стоимость отеля: ")
         bot.register_next_step_handler(msg, min_cost, search_params=search_params)
+    elif message.text == "/history":
+        search_params = SearchParams()
+        search_params.command = message.text
+        history(message)
+
     else:
         bot.send_message(message.from_user.id, "Unknown message")
 
 
 def start_search(message, search_params):
-    msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город: ")
+    msg = bot.reply_to(message, "Пожалуйста введите страну, где находится город (латиницей): ")
     bot.register_next_step_handler(msg, read_country, search_params=search_params)
+
+
+def history(message):
+    bot.send_message(message.from_user.id, f"\n*История вашего поиска: *\n", parse_mode="Markdown")
+    _, cur = sql.connect()
+    list_hotels, command, time_date = sql.search_history(cur, message.from_user.username)
+
+    bot.send_message(message.from_user.id,
+                     f"*• Запрашиваемая команда*:   {command}. \n\n*• Время запроса*:   {time_date}.\n\n",
+                     parse_mode="Markdown")
+
+    bot.send_message(message.from_user.id, f"\n*Отели: *\n", parse_mode="Markdown")
+
+    for hotel in list_hotels:
+        bot.send_message(message.from_user.id, f"*• *   {hotel}.\n\n", parse_mode="Markdown")
+
+    cur.close()
 
 
 def min_cost(message, search_params):
     if not message.text.isdigit():
-        msg = bot.reply_to(message, "Пожалуйста, введите минимальную стоимость цифрой")
+        msg = bot.reply_to(message, "Пожалуйста, введите минимальную стоимость цифрой: ")
         bot.register_next_step_handler(msg, min_cost, search_params=search_params)
         return
 
     search_params.cost_min = float(message.text)
-    msg = bot.reply_to(message, "Пожалуйста введите максимальную стоимость отеля")
+    msg = bot.reply_to(message, "Пожалуйста введите максимальную стоимость отеля: ")
     bot.register_next_step_handler(msg, max_cost, search_params=search_params)
 
 
 def max_cost(message, search_params):
     if not message.text.isdigit():
-        msg = bot.reply_to(message, "Пожалуйста, введите максимальную стоимость цифрой")
+        msg = bot.reply_to(message, "Пожалуйста, введите максимальную стоимость цифрой: ")
         bot.register_next_step_handler(msg, max_cost, search_params=search_params)
         return
 
     search_params.cost_max = float(message.text)
-    msg = bot.reply_to(message, "Пожалуйста введите минимальное расстояние от центра")
+    msg = bot.reply_to(message, "Пожалуйста введите минимальное расстояние от центра (в милях): ")
     bot.register_next_step_handler(msg, min_dest, search_params=search_params)
 
 
 def min_dest(message, search_params):
     if not message.text.isdigit():
-        msg = bot.reply_to(message, "Пожалуйста, введите минимальное расстояние цифрой")
+        msg = bot.reply_to(message, "Пожалуйста, введите минимальное расстояние цифрой (в милях): ")
         bot.register_next_step_handler(msg, min_dest, search_params=search_params)
         return
 
     search_params.distance_min = float(message.text)
-    msg = bot.reply_to(message, "Пожалуйста введите максимальное расстояние от центра")
+    msg = bot.reply_to(message, "Пожалуйста введите максимальное расстояние от центра (в милях):")
     bot.register_next_step_handler(msg, max_dest, search_params=search_params)
 
 
 def max_dest(message, search_params):
     if not message.text.isdigit():
-        msg = bot.reply_to(message, "Пожалуйста, введите максимальное расстояние цифрой")
+        msg = bot.reply_to(message, "Пожалуйста, введите максимальное расстояние цифрой (в милях): ")
         bot.register_next_step_handler(msg, max_dest, search_params=search_params)
         return
     else:
@@ -98,7 +127,7 @@ def max_dest(message, search_params):
 def read_country(message, search_params):
     search_params.country = message.text
     logging.info(f"User: {message.from_user.username}. Target country: {message.text}")
-    msg = bot.reply_to(message, "В каком городе будем искать?")
+    msg = bot.reply_to(message, "В каком городе будем искать (латиницей) ?")
     bot.register_next_step_handler(msg, read_town, search_params=search_params)
 
 
@@ -120,7 +149,7 @@ def read_hotel_count(message, search_params):
     search_params.count = count
     logging.info(f"User: {message.from_user.username}. Search hotel count: {count}")
 
-    msg = bot.reply_to(message, "Введите дату въезда (цифрами, через точку):")
+    msg = bot.reply_to(message, "Введите дату въезда (цифрами, через точку, DD.MM.YYYY):")
     bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
 
 
@@ -132,20 +161,23 @@ def read_date_arrival(message, search_params):
 
     for i in search_params.arrival:
         if not i.isdigit():
-            msg = bot.reply_to(message, "Пожалуйста, введите дату въезда цифрой. Какая дата въезда (цифрами, через пробел):")
+            msg = bot.reply_to(message,
+                               "Пожалуйста, введите дату въезда цифрой. Какая дата въезда (цифрами, через точку, DD.MM.YYYY):")
             bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
             return
 
-
-    if 0 < int(search_params.arrival[0]) > 31 or 0 < int(search_params.arrival[1]) > 12 or 0 < int(search_params.arrival[2]) >= 2025 or int(search_params.arrival[2]) < 2023:
-        msg = bot.reply_to(message, "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через пробел) :")
+    if 0 < int(search_params.arrival[0]) > 31 or 0 < int(search_params.arrival[1]) > 12 or 0 < int(
+            search_params.arrival[2]) >= 2025 or int(search_params.arrival[2]) < 2023:
+        msg = bot.reply_to(message,
+                           "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через точку, DD.MM.YYYY) :")
         bot.register_next_step_handler(msg, read_date_arrival, search_params=search_params)
         return
 
     logging.info(f"User: {message.from_user.username}. Recording the arrival date: {date_arrival}")
 
-    msg = bot.reply_to(message, "Введите дату отъезда (цифрами, через точку):")
+    msg = bot.reply_to(message, "Введите дату отъезда (цифрами, через точку, DD.MM.YYYY):")
     bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
+
 
 def read_date_departure(message, search_params):
     departure = message.text
@@ -155,26 +187,32 @@ def read_date_departure(message, search_params):
 
     for i in search_params.departure:
         if not i.isdigit():
-            msg = bot.reply_to(message, "Пожалуйста, введите дату отъезда цифрой. Какая дата отъезда (цифрами, через точку):")
+            msg = bot.reply_to(message,
+                               "Пожалуйста, введите дату отъезда цифрой. Какая дата отъезда (цифрами, через точку, DD.MM.YYYY):")
             bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
             return
 
-    if 0 < int(search_params.departure[0]) > 31 or 0 < int(search_params.departure[1]) > 12 or 0 < int(search_params.departure[2]) >= 2025 or int(search_params.departure[2]) < 2023:
-        msg = bot.reply_to(message, "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через пробел) :")
+    if 0 < int(search_params.departure[0]) > 31 or 0 < int(search_params.departure[1]) > 12 or 0 < int(
+            search_params.departure[2]) >= 2025 or int(search_params.departure[2]) < 2023:
+        msg = bot.reply_to(message,
+                           "Пожалуйста, введите верный день отъезда. Какая дата отъезда (цифрами, через точку, DD.MM.YYYY) :")
         bot.register_next_step_handler(msg, read_date_departure, search_params=search_params)
         return
 
-
     if search_params.departure[2] < search_params.arrival[2]:
-        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+        bot.send_message(message.from_user.id,
+                         "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
         return
-    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] < search_params.arrival[1]:
-        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] < search_params.arrival[
+        1]:
+        bot.send_message(message.from_user.id,
+                         "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
         return
-    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] == search_params.arrival[1] and search_params.departure[0] < search_params.arrival[0]:
-        bot.send_message(message.from_user.id, "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
+    elif search_params.departure[2] == search_params.arrival[2] and search_params.departure[1] == search_params.arrival[
+        1] and search_params.departure[0] < search_params.arrival[0]:
+        bot.send_message(message.from_user.id,
+                         "Дата отъезда не может быть раньше даты въезда . Пожалуйста, повторите поиск сначала.")
         return
-
 
     logging.info(f"User: {message.from_user.username}. Recording the arrival date: {date_departure}")
 
@@ -237,17 +275,19 @@ def search_hotel(message, search_params):
         bot.send_message(message.from_user.id, "Отели не найдены. Пожалуйста, повторите поиск сначала.")
         return
 
-
     for hotel in hotels:
         logging.info(f"User: {message.from_user.username}. Checking for the status of the response code")
 
         data_hotel = api.info_hotels(hotel.id, search_params)
 
-        bot.send_message(message.from_user.id, f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {hotel.price_string}. \n\n*• Диапазон расстояния*:   {hotel.value}.",
+        bot.send_message(message.from_user.id, "\n *** \n")
+        bot.send_message(message.from_user.id,
+                         f"*• Название отеля*:   {hotel.name}. \n\n*• Адрес отеля*:   {data_hotel[0]}. \n\n*• Цена*:   {round(hotel.price_per_night)}$. \n\n*• Расстояние от центра (в милях)*:   {hotel.value}. \n\n*• Общая стоимость*:   {round(hotel.total_money)}$.",
                          parse_mode="Markdown")
 
         logging.info(f"User: {message.from_user.username}. Map search")
-        bot.send_photo(message.from_user.id, photo=data_hotel[-1], caption=formatting.mbold("• Местоположение на карте"),
+        bot.send_photo(message.from_user.id, photo=data_hotel[-1],
+                       caption=formatting.mbold("• Местоположение на карте"),
                        parse_mode="MarkdownV2")
 
         if search_params.show_photo == "Да":
@@ -260,13 +300,20 @@ def search_hotel(message, search_params):
             bot.send_media_group(message.from_user.id, lisi_jpeg)
 
 
-    logging.error(f"User: {message.from_user.username}. Find hotels successfully!")
+    logging.info(f"User: {message.from_user.username}. Find hotels successfully!")
     bot.send_message(message.from_user.id, f"\n*Поиск закончен!*\n", parse_mode="Markdown")
 
+    search_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    con, cur = sql.connect()
+    sql.write_history(con, cur, message.message_id, message.from_user.username, search_params.command, search_time,
+                      hotels)
+    con.close()
 
 
 if __name__ == "__main__":
-    # Setup logging
+    sql.init_db()
+
     logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(message)s")
 
     bot.set_my_commands(
@@ -275,16 +322,13 @@ if __name__ == "__main__":
             telebot.types.BotCommand("/help", "Show help"),
             telebot.types.BotCommand("/lowprice", "Поиск дешевых отелей!"),
             telebot.types.BotCommand("/highprice", "Поиск дорогих отелей!"),
-            telebot.types.BotCommand("/bestdeal", "Поиск лучших предложений!")
+            telebot.types.BotCommand("/bestdeal", "Поиск лучших предложений!"),
+            telebot.types.BotCommand("/history", "История поиска отелей.")
         ]
     )
-    # Enable saving next step handlers to file "./.handlers-saves/step.save".
-    # Delay=2 means that after any change in next step handlers (e.g. calling register_next_step_handler())
-    # saving will hapen after delay 2 seconds.
+
     bot.enable_save_next_step_handlers(delay=2)
 
-    # Load next_step_handlers from save file (default "./.handlers-saves/step.save")
-    # WARNING It will work only if enable_save_next_step_handlers was called!
     bot.load_next_step_handlers()
 
     bot.infinity_polling()

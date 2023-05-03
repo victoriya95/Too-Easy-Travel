@@ -1,5 +1,5 @@
 import json
-import logging
+from datetime import datetime
 
 import requests
 
@@ -7,8 +7,10 @@ import requests
 class Hotels:
     def __init__(self, name):
         self.name = name
-        self.price_string = None
-        self.price_digit = None
+        self.price_per_night = None
+        self.total_money = None
+        self.value = None
+        self.id = None
 
 
 def search_coordinates(country, town):
@@ -19,7 +21,7 @@ def search_coordinates(country, town):
     querystring = {"q": town, "locale": "en_US", "langid": "1033", "siteid": "300000001"}
 
     headers = {
-        "X-RapidAPI-Key": "2f334e1821msh731ec8077f8ff4ep11950bjsn07c78c7458dc",
+        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
@@ -68,8 +70,7 @@ def search_hotels(coordinates, search_params):
         },
         "rooms": [
             {
-                "adults": 2,
-                "children": [{"age": 5}, {"age": 7}]
+                "adults": 2
             }
         ],
         "resultsStartingIndex": 0,
@@ -81,7 +82,7 @@ def search_hotels(coordinates, search_params):
     }
     headers = {
         "content-type": "application/json",
-        "X-RapidAPI-Key": "2f334e1821msh731ec8077f8ff4ep11950bjsn07c78c7458dc",
+        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
@@ -91,19 +92,24 @@ def search_hotels(coordinates, search_params):
     if response.status_code != 200:
         return True, hotels_result
 
-
     hotels = []
 
     for item in response_json['data']['propertySearch']['properties']:
+        date_departure = datetime.strptime(
+            f'{search_params.departure[0]}-{search_params.departure[1]}-{search_params.departure[2]}',
+            '%d-%m-%Y').date()
+        date_arrival = datetime.strptime(
+            f'{search_params.arrival[0]}-{search_params.arrival[1]}-{search_params.arrival[2]}', '%d-%m-%Y').date()
+        night_count = (date_departure - date_arrival).days
         hotel = Hotels(item['name'])
-        hotel.price_string = item['price']['lead']['formatted']
-        hotel.price_digit = item['price']['lead']['amount']
+        hotel.price_per_night = item['price']['lead']['amount']
         hotel.id = item['id']
+        hotel.total_money = hotel.price_per_night * night_count
         hotel.value = item['destinationInfo']['distanceFromDestination']['value']
         if search_params.distance_min < hotel.value < search_params.distance_max:
             hotels.append(hotel)
 
-    hotels = sorted(hotels, key=lambda d: d.price_digit, reverse=search_params.sort_revers)
+    hotels = sorted(hotels, key=lambda d: d.price_per_night, reverse=search_params.sort_revers)
 
     hotels_result = []
     hotels_count = 0
@@ -132,7 +138,7 @@ def info_hotels(id_hotel, search_params):
     }
     headers = {
         "content-type": "application/json",
-        "X-RapidAPI-Key": "2f334e1821msh731ec8077f8ff4ep11950bjsn07c78c7458dc",
+        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
