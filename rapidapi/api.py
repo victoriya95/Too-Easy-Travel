@@ -83,7 +83,7 @@ def search_hotels(coordinates, search_params):
     }
     headers = {
         "content-type": "application/json",
-        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
+        "X-RapidAPI-Key": os.getenv("RAPID_API_TOKEN"),
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
@@ -139,7 +139,7 @@ def info_hotels(id_hotel, search_params):
     }
     headers = {
         "content-type": "application/json",
-        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
+        "X-RapidAPI-Key": os.getenv("RAPID_API_TOKEN"),
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
