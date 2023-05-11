@@ -58,3 +58,8 @@
 **Пример результата поиска:**
 
 ![1.png](1.png)
+
+
+### Запуск в docker
+* Собрать образ: `docker build . -t telebot:latest`
+* Запустить: `docker run -d --name telebot -e TELEGRAM_API_TOKEN="6095050306:AAEsvO8Vdvb69Pc5w9v2rcT2gBh66l4c_I0" telebot:latest`

@@ -1,14 +1,15 @@
 import logging
+import os
 import sys
 
 import telebot
 from telebot import types, formatting
 import datetime
 
-import api
-import sql
+import rapidapi.api as api
+import database.sql as sql
 
-bot = telebot.TeleBot('6095050306:AAEsvO8Vdvb69Pc5w9v2rcT2gBh66l4c_I0')
+bot = telebot.TeleBot(os.getenv('TELEGRAM_API_TOKEN'))
 
 
 class SearchParams:
