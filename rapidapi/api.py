@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 import requests
@@ -21,7 +22,7 @@ def search_coordinates(country, town):
     querystring = {"q": town, "locale": "en_US", "langid": "1033", "siteid": "300000001"}
 
     headers = {
-        "X-RapidAPI-Key": "32df012346mshd87fedbcb88f051p148a8bjsnd8cf1c4e2072",
+        "X-RapidAPI-Key": os.getenv("RAPID_API_TOKEN"),
         "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
     }
 
